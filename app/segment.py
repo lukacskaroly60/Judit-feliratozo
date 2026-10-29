@@ -7,6 +7,7 @@ Szabályok (alapértelmezésben, beállíthatók):
 - a két sor tördelése kiegyensúlyozott, írásjel után szívesebben tör,
   névelőt / kötőszót nem hagy a sor végén.
 """
+import re
 from dataclasses import dataclass
 
 SENTENCE_END = (".", "?", "!", "…")
@@ -18,11 +19,16 @@ WEAK_WORDS = {
 }
 
 
+# Ennél kisebb valószínűségű szavakat a felület ellenőrzésre jelöli.
+UNSURE_BELOW = 0.6
+
+
 @dataclass
 class Word:
     start: float
     end: float
     text: str
+    p: float = 1.0
 
 
 @dataclass
@@ -80,7 +86,7 @@ def words_to_cues(words: list[Word], rules: Rules | None = None) -> list[dict]:
     cur: list[Word] = []
 
     for w in words:
-        w = Word(w.start, w.end, w.text.strip())
+        w = Word(w.start, w.end, w.text.strip(), w.p)
         if not w.text:
             continue
         if cur:
@@ -111,8 +117,36 @@ def words_to_cues(words: list[Word], rules: Rules | None = None) -> list[dict]:
     for g in groups:
         text = _join(g)
         lines = wrap(text, rules.max_chars, rules.max_lines) or [text]
-        cues.append({"start": g[0].start, "end": g[-1].end, "text": "\n".join(lines)})
+        unsure = [
+            {"text": _bare(w.text), "start": round(w.start, 3), "end": round(w.end, 3)}
+            for w in g if w.p < UNSURE_BELOW and _bare(w.text)
+        ]
+        cues.append({"start": g[0].start, "end": g[-1].end, "text": "\n".join(lines), "unsure": unsure})
     return fix_timing(cues, rules)
+
+
+def _bare(word: str) -> str:
+    """Szó írásjelek nélkül."""
+    return word.strip(".,;:!?…\"'„”()–-")
+
+
+def apply_corrections(cues: list[dict], pairs: list[dict], rules: Rules | None = None) -> int:
+    """A megjegyzett javítások (pl. rosszul felismert nevek) alkalmazása.
+    Teljes szavakra illeszt, kis- és nagybetűtől függetlenül. Visszaadja a cserék számát."""
+    rules = rules or Rules()
+    count = 0
+    for pair in pairs:
+        src, dst = pair.get("from", "").strip(), pair.get("to", "")
+        if not src:
+            continue
+        pattern = re.compile(rf"(?<!\w){re.escape(src)}(?!\w)", re.IGNORECASE)
+        for cue in cues:
+            new, n = pattern.subn(lambda _: dst, cue["text"])
+            if n:
+                count += n
+                flat = " ".join(new.split())
+                cue["text"] = "\n".join(wrap(flat, rules.max_chars, rules.max_lines) or [flat])
+    return count
 
 
 def fix_timing(cues: list[dict], rules: Rules | None = None) -> list[dict]:

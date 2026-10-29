@@ -61,7 +61,7 @@ def transcribe(
         total = info.duration or 1
         for seg in segments:
             for w in seg.words or []:
-                words.append(Word(w.start, w.end, w.word))
+                words.append(Word(w.start, w.end, w.word, w.probability))
             progress(min(seg.end / total, 1), f"Beszéd felismerése… {_mmss(seg.end)} / {_mmss(total)}")
         return words
 

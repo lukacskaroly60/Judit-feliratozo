@@ -52,11 +52,12 @@
       <div class="actions">
         <button class="primary" id="btnTranscribe">🤖 Automatikus felirat (AI)</button>
         <button id="btnImport">📥 SRT betöltése</button>
-        <a class="button" id="btnExport">📄 SRT letöltése</a>
+        <a class="button" id="btnExport" download>📄 SRT letöltése</a>
         <button id="btnReplace">🔎 Keresés és csere</button>
         <button id="btnRetime">⏱ Időzítés javítása</button>
+        <button id="btnDictionary">📖 Javításlista</button>
         <button class="primary" id="btnRender">🎬 Feliratos MP4 készítése</button>
-        <a class="button success hidden" id="btnDownload">⬇ Kész videó letöltése</a>
+        <a class="button success hidden" id="btnDownload" download>⬇ Kész videó letöltése</a>
         <input type="file" id="srtInput" accept=".srt" hidden>
       </div>
       <details class="help" open>
@@ -66,6 +67,7 @@
           <tr><td><kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd></td><td>1 mp vissza / előre (+<kbd>Shift</kbd>: 0,1 mp)</td></tr>
           <tr><td><kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd></td><td>előző / következő felirat</td></tr>
           <tr><td><kbd>Alt</kbd>+<kbd>I</kbd> / <kbd>O</kbd></td><td>felirat kezdete / vége = jelenlegi idő</td></tr>
+          <tr><td><kbd>Alt</kbd>+<kbd>U</kbd></td><td>következő bizonytalan szó (meg is hallgatja)</td></tr>
           <tr><td><kbd>Alt</kbd>+<kbd>P</kbd></td><td>kijelölt felirat lejátszása</td></tr>
           <tr><td><kbd>Alt</kbd>+<kbd>N</kbd></td><td>új felirat a jelenlegi időnél</td></tr>
           <tr><td><kbd>Alt</kbd>+<kbd>S</kbd></td><td>felirat kettévágása (a kurzornál)</td></tr>
@@ -80,6 +82,7 @@
       <div class="list-head">
         <span id="cueCount">0 felirat</span>
         <span id="issueCount" class="issues"></span>
+        <button id="unsureCount" class="unsure-count hidden" title="Ugrás a következőre (Alt+U)"></button>
         <label><input type="checkbox" id="follow" checked> követés lejátszáskor</label>
       </div>
       <div id="cueList" class="cue-list"></div>
@@ -96,8 +99,8 @@
       <h3>Automatikus felirat készítése</h3>
       <label>Pontosság / sebesség
         <select name="model">
-          <option value="large-v3-turbo" selected>Legjobb (large-v3-turbo) – ajánlott</option>
-          <option value="large-v3">Legpontosabb, lassú (large-v3)</option>
+          <option value="large-v3" selected>Legpontosabb (large-v3) – ajánlott</option>
+          <option value="large-v3-turbo">Gyorsabb, majdnem ilyen pontos (large-v3-turbo)</option>
           <option value="medium">Közepes (medium)</option>
           <option value="small">Gyors, kevésbé pontos (small)</option>
         </select>
@@ -156,9 +159,28 @@
       <label>Csere erre <input name="repl"></label>
       <label class="radio"><input type="checkbox" name="whole" checked> <span>csak teljes szó</span></label>
       <label class="radio"><input type="checkbox" name="case"> <span>kis- és nagybetű számít</span></label>
+      <label class="radio"><input type="checkbox" name="remember"> <span><b>Megjegyzés:</b> a jövőben az AI által készített
+        feliratokban ezt automatikusan javítsa (pl. rendszeresen elrontott nevek)</span></label>
       <menu>
         <button value="cancel">Mégse</button>
         <button value="ok" class="primary">Összes cseréje</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <!-- Javításlista -->
+  <dialog id="dlgDictionary">
+    <form method="dialog">
+      <h3>Javításlista</h3>
+      <p class="hint">Amit az AI rendszeresen rosszul ír, azt minden új átírás után automatikusan kijavítja a program.</p>
+      <div id="pairList" class="pair-list"></div>
+      <button type="button" id="addPair">+ Új javítás</button>
+      <label style="margin-top:16px">Gyakori nevek, szakszavak (az AI ezeket előre megkapja)
+        <textarea name="names" rows="3" placeholder="pl. műsorvezetők, helyszínek, intézmények nevei"></textarea>
+      </label>
+      <menu>
+        <button value="cancel">Mégse</button>
+        <button value="ok" class="primary">Mentés</button>
       </menu>
     </form>
   </dialog>

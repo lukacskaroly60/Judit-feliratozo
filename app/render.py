@@ -24,6 +24,21 @@ def duration(path: Path) -> float:
         return (container.duration or 0) / 1_000_000
 
 
+def extract_subtitles(workdir: Path, source: str) -> str | None:
+    """A videóba ágyazott első feliratsáv kiolvasása SRT szövegként (ha van)."""
+    import av
+
+    with av.open(str(workdir / source)) as container:
+        if not container.streams.subtitles:
+            return None
+    proc = subprocess.run(
+        [ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-i", source, "-map", "0:s:0", "-f", "srt", "-"],
+        cwd=workdir, capture_output=True, timeout=300,
+    )
+    text = proc.stdout.decode("utf-8", errors="replace")
+    return text if proc.returncode == 0 and "-->" in text else None
+
+
 def _style(font_size: str, box: bool) -> str:
     size = FONT_SIZES.get(font_size, 20)
     parts = ["FontName=Arial", f"FontSize={size}", "PrimaryColour=&H00FFFFFF", "MarginV=18"]

@@ -5,6 +5,7 @@ import shutil
 import threading
 import time
 import traceback
+import unicodedata
 import uuid
 from pathlib import Path
 from urllib.parse import quote
@@ -15,12 +16,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import render, srt
-from .segment import Rules, fix_timing, words_to_cues
+from .segment import Rules, apply_corrections, fix_timing, words_to_cues
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data" / "projects"
 DATA.mkdir(parents=True, exist_ok=True)
 STATIC = Path(__file__).resolve().parent / "static"
+DICTIONARY = ROOT / "data" / "szotar.json"
 
 app = FastAPI(title="Judit feliratozó")
 
@@ -53,6 +55,30 @@ def save(project: dict) -> None:
         tmp.replace(d / "project.json")
 
 
+def load_dictionary() -> dict:
+    """Projekteken átívelő tudás: megjegyzett javítások és a gyakori nevek listája."""
+    if DICTIONARY.exists():
+        return json.loads(DICTIONARY.read_text("utf-8"))
+    return {"pairs": [], "names": ""}
+
+
+def save_dictionary(d: dict) -> None:
+    tmp = DICTIONARY.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), "utf-8")
+    tmp.replace(DICTIONARY)
+
+
+def output_outdated(d: Path, project: dict) -> bool:
+    out = d / "output.mp4"
+    return out.exists() and out.stat().st_mtime < project.get("cues_changed", 0)
+
+
+def disposition(name: str) -> dict:
+    """Letöltési fájlnév ékezetekkel, és ékezet nélküli tartalékkal a régebbi programoknak."""
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().replace('"', "")
+    return {"Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"}
+
+
 def output_name(project: dict) -> str:
     return Path(project["name"]).stem + "_feliratos.mp4"
 
@@ -81,10 +107,17 @@ def run_job(pid: str, kind: str, fn) -> None:
 
 # ---------- API ----------
 
+class Unsure(BaseModel):
+    text: str
+    start: float
+    end: float
+
+
 class Cue(BaseModel):
     start: float
     end: float
     text: str
+    unsure: list[Unsure] = []
 
 
 class CuesIn(BaseModel):
@@ -92,12 +125,17 @@ class CuesIn(BaseModel):
 
 
 class TranscribeIn(BaseModel):
-    model: str = "large-v3-turbo"
+    model: str = "large-v3"
     language: str = "hu"
     prompt: str = ""
     max_chars: int = 37
     max_lines: int = 2
     max_cps: float = 15.0
+
+
+class DictionaryIn(BaseModel):
+    pairs: list[dict]
+    names: str = ""
 
 
 class RenderIn(BaseModel):
@@ -114,6 +152,7 @@ def list_projects():
         items.append({
             "id": p["id"], "name": p["name"], "updated": p.get("updated", 0),
             "cues": len(p.get("cues", [])), "has_output": (f.parent / "output.mp4").exists(),
+            "unsure": sum(len(c.get("unsure", [])) for c in p.get("cues", [])),
         })
     return sorted(items, key=lambda x: -x["updated"])
 
@@ -129,6 +168,14 @@ def create_project(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, out, length=1024 * 1024)
     project = {"id": pid, "name": file.filename or "video.mp4", "source": source,
                "created": time.time(), "cues": [], "settings": {}}
+    # Ha a videóban már van feliratsáv (pl. egy korábban itt készült MP4), betöltjük javításra.
+    try:
+        embedded = render.extract_subtitles(d, source)
+        if embedded:
+            project["cues"] = srt.from_srt(embedded)
+            project["imported_from_video"] = True
+    except Exception:
+        traceback.print_exc()
     save(project)
     return project
 
@@ -138,6 +185,7 @@ def get_project(pid: str):
     project = load(pid)
     project["job"] = jobs.get(pid)
     project["has_output"] = (project_dir(pid) / "output.mp4").exists()
+    project["output_outdated"] = output_outdated(project_dir(pid), project)
     return project
 
 
@@ -160,8 +208,22 @@ def get_video(pid: str):
 def put_cues(pid: str, body: CuesIn):
     project = load(pid)
     project["cues"] = [c.model_dump() for c in body.cues]
+    project["cues_changed"] = time.time()
     save(project)
     return {"ok": True, "updated": project["updated"]}
+
+
+@app.get("/api/dictionary")
+def get_dictionary():
+    return load_dictionary()
+
+
+@app.put("/api/dictionary")
+def put_dictionary(body: DictionaryIn):
+    pairs = [{"from": p.get("from", "").strip(), "to": p.get("to", "")} for p in body.pairs]
+    d = {"pairs": [p for p in pairs if p["from"]], "names": body.names}
+    save_dictionary(d)
+    return d
 
 
 @app.get("/api/projects/{pid}/job")
@@ -182,10 +244,18 @@ def start_transcribe(pid: str, body: TranscribeIn):
         words = transcribe(path, body.model, body.language, body.prompt, progress)
         progress(1, "Feliratok tördelése…")
         p = load(pid)
-        p["cues"] = words_to_cues(words, rules)
+        cues = words_to_cues(words, rules)
+        fixed = apply_corrections(cues, load_dictionary()["pairs"], rules)
+        p["cues"] = fix_timing(cues, rules)
+        p["cues_changed"] = time.time()
         p["settings"] = body.model_dump()
+        p["dictionary_fixes"] = fixed
         save(p)
 
+    if body.prompt.strip():
+        d = load_dictionary()
+        d["names"] = body.prompt.strip()
+        save_dictionary(d)
     run_job(pid, "transcribe", work)
     return {"ok": True}
 
@@ -202,6 +272,7 @@ async def import_srt(pid: str, file: UploadFile = File(...)):
         project["cues"] = srt.from_srt(text)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    project["cues_changed"] = time.time()
     save(project)
     return project
 
@@ -213,7 +284,7 @@ def export_srt(pid: str):
     return PlainTextResponse(
         "﻿" + srt.to_srt(project["cues"]),
         media_type="application/x-subrip; charset=utf-8",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"},
+        headers=disposition(name),
     )
 
 
@@ -224,6 +295,7 @@ def retime(pid: str):
     s = project.get("settings") or {}
     rules = Rules(max_chars=s.get("max_chars", 37), max_lines=s.get("max_lines", 2), max_cps=s.get("max_cps", 15.0))
     project["cues"] = fix_timing(sorted(project["cues"], key=lambda c: c["start"]), rules)
+    project["cues_changed"] = time.time()
     save(project)
     return project
 
@@ -251,7 +323,7 @@ def get_output(pid: str):
     f = project_dir(pid) / "output.mp4"
     if not f.exists():
         raise HTTPException(404, "Még nincs elkészült videó")
-    return FileResponse(f, media_type="video/mp4", filename=output_name(project))
+    return FileResponse(f, media_type="video/mp4", headers=disposition(output_name(project)))
 
 
 app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")

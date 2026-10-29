@@ -174,8 +174,15 @@ async function openProject(id) {
   video.src = `/api/projects/${id}/video`;
   $("#btnExport").href = `/api/projects/${id}/export.srt`;
   $("#btnDownload").href = `/api/projects/${id}/output`;
+  const stem = p.name.replace(/\.[^.]+$/, "");
+  $("#btnExport").download = `${stem}.srt`;
+  $("#btnDownload").download = `${stem}_feliratos.mp4`;
   $("#btnDownload").classList.toggle("hidden", !p.has_output);
+  setOutdated(p.output_outdated);
   renderList();
+  if (p.imported_from_video && !p.settings?.model) {
+    toast(`A videóban talált ${p.cues.length} feliratot betöltöttem – javíthatod, majd készítsd el újra a videót.`, 6000);
+  }
   showJob(p.job);
   if (p.job && p.job.state === "running") startPolling();
 }
@@ -226,7 +233,8 @@ function renderList() {
         <span class="cps"></span>
       </div>
       <textarea rows="2" spellcheck="true" lang="hu"></textarea>
-      <div class="problems"></div>`;
+      <div class="problems"></div>
+      <div class="unsure"></div>`;
     const ta = row.querySelector("textarea");
     ta.value = c.text;
     ta.addEventListener("focus", () => { select(row._i, false); ta._undoPushed = false; });
@@ -282,13 +290,85 @@ function updateRow(i) {
   row.querySelector(".problems").textContent = probs.join(" · ");
   row.querySelector("textarea").classList.toggle("err", probs.length > 0);
   row.classList.toggle("bad", probs.length > 0);
+  renderUnsure(row, i);
+}
+
+// ---------- bizonytalan szavak ----------
+
+function hasWord(text, word) {
+  const esc = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{N}])${esc}(?![\\p{L}\\p{N}])`, "u").test(text);
+}
+
+// Csak azok a jelölések számítanak, amelyek szava még szerepel a szövegben:
+// ha Judit átírja a szót, a jelölés magától eltűnik.
+function visibleUnsure(c) {
+  return (c.unsure || []).filter((u) => hasWord(c.text, u.text));
+}
+
+function renderUnsure(row, i) {
+  const unsure = visibleUnsure(state.cues[i]);
+  row.classList.toggle("has-unsure", unsure.length > 0);
+  const box = row.querySelector(".unsure");
+  box.replaceChildren();
+  if (!unsure.length) return;
+  box.append("Ellenőrizd:");
+  for (const u of unsure) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.textContent = `▶ ${u.text}`;
+    b.title = "Meghallgatás – az AI ebben a szóban bizonytalan";
+    b.onclick = () => playWord(u);
+    box.append(b);
+  }
+  const ok = document.createElement("button");
+  ok.type = "button";
+  ok.className = "ok";
+  ok.textContent = "✓ Jó így";
+  ok.title = "A szavak helyesek, a jelölés eltávolítása";
+  ok.onclick = () => {
+    pushUndo();
+    state.cues[row._i].unsure = [];
+    updateRow(row._i);
+    updateCounts();
+    scheduleSave();
+  };
+  box.append(ok);
+}
+
+function playWord(u) {
+  video.currentTime = Math.max(0, u.start - 0.6);
+  state.playUntil = u.end + 0.5;
+  video.play();
+}
+
+function nextUnsure() {
+  const n = state.cues.length;
+  const from = currentIndex();
+  for (let k = 1; k <= n; k++) {
+    const i = (from + k + n) % n;
+    const unsure = visibleUnsure(state.cues[i]);
+    if (unsure.length) {
+      select(i);
+      focusText(i);
+      playWord(unsure[0]);
+      return;
+    }
+  }
+  toast("Nincs több bizonytalan szó ✓");
 }
 
 function updateCounts() {
   $("#cueCount").textContent = `${state.cues.length} felirat`;
   const bad = state.cues.filter((_, i) => problems(i).length).length;
   $("#issueCount").textContent = bad ? `⚠ ${bad} hibás` : "";
+  const unsure = state.cues.reduce((n, c) => n + visibleUnsure(c).length, 0);
+  const btn = $("#unsureCount");
+  btn.textContent = `🔍 ${unsure} szó ellenőrzésre`;
+  btn.classList.toggle("hidden", unsure === 0);
 }
+$("#unsureCount").onclick = nextUnsure;
 
 function afterTimeChange(i) {
   const c = state.cues[i];
@@ -413,7 +493,7 @@ function newCue() {
   const end = Math.min(t + 2, nextStart - 0.08);
   if (end - t < 0.3) return toast("Itt nincs hely új feliratnak");
   pushUndo();
-  state.cues.splice(idx, 0, { start: +t.toFixed(3), end: +end.toFixed(3), text: "" });
+  state.cues.splice(idx, 0, { start: +t.toFixed(3), end: +end.toFixed(3), text: "", unsure: [] });
   state.selected = idx;
   renderList();
   focusText(idx);
@@ -442,8 +522,10 @@ function splitCue() {
   pushUndo();
   const r = state.rules;
   state.cues.splice(i, 1,
-    { start: c.start, end: +(cut - 0.04).toFixed(3), text: wrap(a, r.maxChars, r.maxLines).join("\n") },
-    { start: +(cut + 0.04).toFixed(3), end: c.end, text: wrap(b, r.maxChars, r.maxLines).join("\n") });
+    { start: c.start, end: +(cut - 0.04).toFixed(3), text: wrap(a, r.maxChars, r.maxLines).join("\n"),
+      unsure: (c.unsure || []).filter((u) => u.start < cut) },
+    { start: +(cut + 0.04).toFixed(3), end: c.end, text: wrap(b, r.maxChars, r.maxLines).join("\n"),
+      unsure: (c.unsure || []).filter((u) => u.start >= cut) });
   state.selected = i + 1;
   renderList();
   focusText(i + 1, 0);
@@ -456,7 +538,10 @@ function mergeNext() {
   pushUndo();
   const a = state.cues[i], b = state.cues[i + 1];
   const text = `${a.text} ${b.text}`.replace(/\s+/g, " ").trim();
-  state.cues.splice(i, 2, { start: a.start, end: b.end, text: wrap(text, state.rules.maxChars, state.rules.maxLines).join("\n") });
+  state.cues.splice(i, 2, {
+    start: a.start, end: b.end, text: wrap(text, state.rules.maxChars, state.rules.maxLines).join("\n"),
+    unsure: [...(a.unsure || []), ...(b.unsure || [])],
+  });
   state.selected = i;
   renderList();
   focusText(i);
@@ -521,6 +606,7 @@ document.addEventListener("keydown", (e) => {
     KeyI: setIn,
     KeyO: setOut,
     KeyP: playSelected,
+    KeyU: nextUnsure,
     KeyN: newCue,
     KeyS: splitCue,
     KeyM: mergeNext,
@@ -549,6 +635,7 @@ async function flushSave() {
   try {
     await api(`/api/projects/${state.project.id}/cues`, jsonBody({ cues: state.cues }, "PUT"));
     $("#saveState").textContent = "✓ Mentve";
+    setOutdated(true);
   } catch (e) {
     state.dirty = true;
     $("#saveState").textContent = "⚠ Nem sikerült menteni";
@@ -556,6 +643,15 @@ async function flushSave() {
   }
 }
 window.addEventListener("beforeunload", (e) => { if (state.dirty) { flushSave(); e.preventDefault(); } });
+
+// A már elkészült videó nem tartalmazza a későbbi javításokat – ezt jelezzük.
+function setOutdated(outdated) {
+  const btn = $("#btnDownload");
+  if (btn.classList.contains("hidden")) outdated = false;
+  btn.classList.toggle("outdated", !!outdated);
+  btn.textContent = outdated ? "⬇ Kész videó (régi – a javítások még nincsenek benne)" : "⬇ Kész videó letöltése";
+  btn.title = outdated ? "Készítsd el újra a videót, hogy a javítások is benne legyenek" : "";
+}
 
 // ---------- háttérfeladatok ----------
 
@@ -590,9 +686,15 @@ function startPolling() {
       state.project.settings = p.settings;
       state.undo = [];
       renderList();
-      toast(`Kész! ${p.cues.length} felirat készült. Nézd át és javítsd, ahol kell.`, 5000);
+      setOutdated(true);
+      const unsure = p.cues.reduce((n, c) => n + (c.unsure || []).length, 0);
+      let msg = `Kész! ${p.cues.length} felirat készült.`;
+      if (p.dictionary_fixes) msg += ` ${p.dictionary_fixes} szót a javításlista alapján kijavítottam.`;
+      if (unsure) msg += ` ${unsure} bizonytalan szót jelöltem – Alt+U-val sorra meghallgathatod őket.`;
+      toast(msg, 8000);
     } else if (job.state === "done" && job.kind === "render") {
       $("#btnDownload").classList.remove("hidden");
+      setOutdated(false);
       toast("A feliratos videó elkészült!", 5000);
     }
   }, 1000);
@@ -609,6 +711,11 @@ function stopPolling() {
 function ask(dialog) {
   return new Promise((resolve) => {
     dialog.returnValue = "";
+    // Enter = jóváhagyás (különben a sorrendben első „Mégse” gomb kapná meg)
+    for (const b of dialog.querySelectorAll("button[value=cancel]")) {
+      b.type = "button";
+      b.onclick = () => dialog.close("cancel");
+    }
     dialog.showModal();
     dialog.addEventListener("close", () => resolve(dialog.returnValue === "ok" ? new FormData(dialog.querySelector("form")) : null), { once: true });
   });
@@ -620,7 +727,7 @@ $("#btnTranscribe").onclick = async () => {
   form.max_chars.value = state.rules.maxChars;
   form.max_lines.value = state.rules.maxLines;
   form.max_cps.value = state.rules.maxCps;
-  if (state.project.settings?.prompt) form.prompt.value = state.project.settings.prompt;
+  form.prompt.value = state.project.settings?.prompt || (await api("/api/dictionary")).names || "";
   $("#overwriteWarn").classList.toggle("hidden", !state.cues.length);
   const fd = await ask(dlg);
   if (!fd) return;
@@ -676,6 +783,7 @@ $("#srtInput").onchange = async (e) => {
     pushUndo();
     state.cues = p.cues;
     renderList();
+    setOutdated(true);
     toast(`${p.cues.length} felirat betöltve`);
   } catch (err) { toast("Hiba: " + err.message); }
 };
@@ -686,6 +794,7 @@ $("#btnRetime").onclick = async () => {
   const p = await api(`/api/projects/${state.project.id}/retime`, { method: "POST" });
   state.cues = p.cues;
   renderList();
+  setOutdated(true);
   toast("Időzítés javítva (Alt+Z: visszavonás)");
 };
 
@@ -702,10 +811,50 @@ $("#btnReplace").onclick = async () => {
   for (const c of state.cues) {
     c.text = c.text.replace(re, () => { count++; return fd.get("repl"); });
   }
-  if (!count) { state.undo.pop(); return toast("Nincs találat"); }
-  renderList();
-  scheduleSave();
-  toast(`${count} csere történt`);
+  let msg = count ? `${count} csere történt` : "Nincs találat";
+  if (count) { renderList(); scheduleSave(); } else state.undo.pop();
+  if (fd.get("remember")) {
+    const d = await api("/api/dictionary");
+    d.pairs = d.pairs.filter((p) => p.from.toLowerCase() !== find.toLowerCase());
+    d.pairs.push({ from: find, to: fd.get("repl") });
+    await api("/api/dictionary", jsonBody(d, "PUT"));
+    msg += " · megjegyeztem a javításlistában";
+  }
+  toast(msg);
+};
+
+// ---------- javításlista ----------
+
+function pairRow(pair = { from: "", to: "" }) {
+  const div = document.createElement("div");
+  div.className = "pair";
+  div.innerHTML = `<input class="from" placeholder="Hibás (amit az AI ír)"><span>→</span>
+    <input class="to" placeholder="Helyes"><button type="button" title="Törlés">🗑</button>`;
+  div.querySelector(".from").value = pair.from;
+  div.querySelector(".to").value = pair.to;
+  div.querySelector("button").onclick = () => div.remove();
+  return div;
+}
+
+$("#addPair").onclick = () => {
+  const row = pairRow();
+  $("#pairList").append(row);
+  row.querySelector("input").focus();
+};
+
+$("#btnDictionary").onclick = async () => {
+  const dlg = $("#dlgDictionary");
+  const d = await api("/api/dictionary");
+  $("#pairList").replaceChildren(...d.pairs.map(pairRow));
+  if (!d.pairs.length) $("#pairList").append(pairRow());
+  dlg.querySelector("form").names.value = d.names || "";
+  const fd = await ask(dlg);
+  if (!fd) return;
+  const pairs = [...$("#pairList").children].map((div) => ({
+    from: div.querySelector(".from").value.trim(), to: div.querySelector(".to").value,
+  })).filter((p) => p.from);
+  await api("/api/dictionary", jsonBody({ pairs, names: fd.get("names") }, "PUT"));
+  toast("Javításlista mentve – a következő AI-átírástól érvényes");
 };
 
 route();

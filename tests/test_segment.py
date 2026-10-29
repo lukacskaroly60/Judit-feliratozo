@@ -1,4 +1,4 @@
-from app.segment import Rules, Word, words_to_cues, wrap
+from app.segment import Rules, Word, apply_corrections, words_to_cues, wrap
 from app.srt import from_srt, to_srt
 
 
@@ -59,3 +59,16 @@ def test_srt_roundtrip():
     text = to_srt(cues)
     assert "01:01:01,001 --> 01:01:02,000" in text
     assert from_srt("﻿" + text.replace("\n", "\r\n")) == cues
+
+
+def test_unsure_words_are_marked():
+    words = [Word(0.0, 0.4, " Megérkezett"), Word(0.5, 0.9, " Kovács", 0.2), Word(1.0, 1.4, " Péter.", 0.95)]
+    cues = words_to_cues(words)
+    assert cues[0]["unsure"] == [{"text": "Kovács", "start": 0.5, "end": 0.9}]
+
+
+def test_corrections_whole_word_and_rewrap():
+    cues = [{"start": 0, "end": 2, "text": "Ma Kovacs Péter beszélt,\nKovacsné nem."}]
+    n = apply_corrections(cues, [{"from": "kovacs", "to": "Kovács"}], Rules())
+    assert n == 1
+    assert cues[0]["text"].replace("\n", " ") == "Ma Kovács Péter beszélt, Kovacsné nem."
