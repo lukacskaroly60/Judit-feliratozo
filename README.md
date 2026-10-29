@@ -28,6 +28,37 @@ A programot a fekete ablak bezárásával lehet leállítani.
 
 macOS-en vagy Linuxon az `inditas.sh` fájllal indul (`./inditas.sh`).
 
+## Hordozható változat (pendrive-ról, telepítés nélkül)
+
+Ha nem szeretnél semmit telepíteni a gépre, a program egy mappából – akár pendrive-ról –
+is futtatható. Ehhez a gépre **nem kell Python**, és **semmi nem marad utána**: a Python,
+az AI modell és a munkák is mind a mappában vannak.
+
+**Előkészítés (egyszer, internettel, egy 64 bites Windowsos gépen):**
+
+1. Másold a program kibontott mappáját a pendrive-ra.
+2. Kattints duplán a **`Hordozhato_elokeszites.bat`** fájlra. Letölti a Pythont és a
+   szükséges részeket a mappába, majd megkérdezi, melyik AI modellt töltse le
+   (ajánlott: 1 = legpontosabb). Ez a pendrive sebességétől függően 10–30 perc.
+   - Ha megszakad, csak futtasd újra: onnan folytatja, ahol abbahagyta.
+   - Ha a Windows kék ablakkal figyelmeztet: **További információ → Futtatás mindenképp**.
+
+**Használat (bármelyik Windowsos gépen):**
+
+- Dupla kattintás a **`Hordozhato_inditas.bat`** fájlra. Ha előre letöltötted a modellt,
+  internet sem kell hozzá.
+
+**Amire figyelj:**
+
+- Legalább **8 GB** szabad hely kell (a videók miatt inkább 16–32 GB-os pendrive).
+- **USB 3-as** pendrive ajánlott, különben lassú a modell betöltése.
+- FAT32-es pendrive-on egy fájl legfeljebb 4 GB lehet; nagy videókhoz formázd **exFAT**-ra.
+- Ha az előkészítés azt írja, hogy hiányzik a „Visual C++ futtatókörnyezet”, telepítsd
+  innen, majd futtasd újra: <https://aka.ms/vs/17/release/vc_redist.x64.exe>
+
+A hordozható és a telepíthető változat ugyanaz a program, csak másképp indul.
+Egy mappában mindkettő megfér, és ugyanazokat a munkákat (`data` mappa) látják.
+
 ## Sebesség
 
 - **NVIDIA videókártyával** a felismerés gyors (egy 30 perces műsor néhány perc).
@@ -103,3 +134,6 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt pytest
 - `app/segment.py` – feliratokra bontás, sortörés, időzítési szabályok
 - `app/render.py` – MP4 készítés ffmpeg-gel (az `imageio-ffmpeg` csomag hozza magával)
 - `app/main.py` – FastAPI szerver; `app/static/` – a szerkesztő felület
+- `Inditas.bat` – telepíthető változat (virtuális környezet a gépre telepített Pythonnal)
+- `Hordozhato_elokeszites.bat`, `Hordozhato_inditas.bat` – hordozható változat a Windows
+  beágyazott Pythonjával (`python/` mappa); a modell a `data/hf` mappába kerül (`HF_HOME`)
