@@ -9,12 +9,17 @@ FONT_SIZES = {"kicsi": 16, "kozepes": 20, "nagy": 24}
 
 
 def ffmpeg_exe() -> str:
-    exe = shutil.which("ffmpeg")
-    if exe:
-        return exe
-    import imageio_ffmpeg
+    # Elsősorban a magunkkal hozott ffmpeg-et használjuk: a gépen talált
+    # példány régi lehet, vagy hiányozhat belőle a feliratbeégetés (libass).
+    try:
+        import imageio_ffmpeg
 
-    return imageio_ffmpeg.get_ffmpeg_exe()
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        exe = shutil.which("ffmpeg")
+        if exe:
+            return exe
+        raise RuntimeError("Nem található az ffmpeg program")
 
 
 def duration(path: Path) -> float:
