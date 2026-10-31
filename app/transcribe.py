@@ -1,8 +1,11 @@
 """Beszédfelismerés a faster-whisper modellel (helyben fut, nem kell internet a modell letöltése után)."""
+import subprocess
 import threading
 from typing import Callable
 
 from .segment import Word
+
+SAMPLE_RATE = 16000
 
 _lock = threading.Lock()
 _model = None
@@ -20,12 +23,35 @@ def _device() -> tuple[str, str]:
     return "cpu", "int8"
 
 
-def get_model(name: str):
+def load_audio(path: str):
+    """A videó hangja 16 kHz-es mono lebegőpontos tömbként.
+
+    A magunkkal hozott ffmpeg-gel olvassuk ki, nem a faster-whisper saját
+    (PyAV-alapú) dekóderével, mert az a PyAV újabb kiadásaival nem működik."""
+    import numpy as np
+
+    from .render import ffmpeg_exe
+
+    proc = subprocess.run(
+        [ffmpeg_exe(), "-nostdin", "-hide_banner", "-loglevel", "error", "-i", path,
+         "-vn", "-ac", "1", "-ar", str(SAMPLE_RATE), "-f", "f32le", "-"],
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        err = proc.stderr.decode("utf-8", errors="replace").strip().splitlines()[-3:]
+        raise RuntimeError("Nem sikerült kiolvasni a hangot a videóból: " + " ".join(err))
+    audio = np.frombuffer(proc.stdout, dtype=np.float32)
+    if audio.size == 0:
+        raise RuntimeError("A videóban nincs hang")
+    return audio
+
+
+def get_model(name: str, force_cpu: bool = False):
     global _model, _model_name
-    if _model is None or _model_name != name:
+    if force_cpu or _model is None or _model_name != name:
         from faster_whisper import WhisperModel
 
-        device, compute_type = _device()
+        device, compute_type = ("cpu", "int8") if force_cpu else _device()
         try:
             _model = WhisperModel(name, device=device, compute_type=compute_type)
         except Exception:
@@ -45,25 +71,40 @@ def transcribe(
     progress: Callable[[float, str], None] = lambda p, m: None,
 ) -> list[Word]:
     with _lock:
+        progress(0, "Hang kiolvasása a videóból…")
+        audio = load_audio(path)
         progress(0, "AI modell betöltése (első alkalommal letöltés, ez eltarthat pár percig)…")
         model = get_model(model_name)
-        progress(0, "Beszéd felismerése…")
-        segments, info = model.transcribe(
-            path,
-            language=language or None,
-            word_timestamps=True,
-            vad_filter=True,
-            beam_size=5,
-            condition_on_previous_text=False,
-            initial_prompt=prompt or None,
-        )
-        words: list[Word] = []
-        total = info.duration or 1
-        for seg in segments:
-            for w in seg.words or []:
-                words.append(Word(w.start, w.end, w.word, w.probability))
-            progress(min(seg.end / total, 1), f"Beszéd felismerése… {_mmss(seg.end)} / {_mmss(total)}")
-        return words
+        try:
+            return _run(model, audio, language, prompt, progress)
+        except RuntimeError as e:
+            # NVIDIA kártya van, de hiányzik hozzá a CUDA (pl. cublas64_12.dll):
+            # ez csak a felismerés közben derül ki, ilyenkor processzoron futunk.
+            if "cuda" not in str(e).lower() and "cublas" not in str(e).lower() and "cudnn" not in str(e).lower():
+                raise
+            progress(0, "A videókártya nem használható, átváltás processzorra…")
+            model = get_model(model_name, force_cpu=True)
+            return _run(model, audio, language, prompt, progress)
+
+
+def _run(model, audio, language, prompt, progress) -> list[Word]:
+    progress(0, "Beszéd felismerése…")
+    segments, info = model.transcribe(
+        audio,
+        language=language or None,
+        word_timestamps=True,
+        vad_filter=True,
+        beam_size=5,
+        condition_on_previous_text=False,
+        initial_prompt=prompt or None,
+    )
+    words: list[Word] = []
+    total = info.duration or 1
+    for seg in segments:
+        for w in seg.words or []:
+            words.append(Word(w.start, w.end, w.word, w.probability))
+        progress(min(seg.end / total, 1), f"Beszéd felismerése… {_mmss(seg.end)} / {_mmss(total)}")
+    return words
 
 
 def _mmss(sec: float) -> str:

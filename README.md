@@ -16,11 +16,16 @@ telepítéshez és az AI modell első letöltéséhez kell.
 
 ## Telepítés és indítás (Windows)
 
-1. Telepítsd a Pythont: <https://www.python.org/downloads/> (a telepítőben pipáld be:
-   **„Add python.exe to PATH”**).
+1. Telepítsd a **Python 3.12**-t: <https://www.python.org/downloads/release/python-31210/>
+   (lent: **„Windows installer (64-bit)”**; a telepítőben pipáld be: **„Add python.exe to PATH”**).
+   - **Ne a legújabb verziót** töltsd le (3.15): ahhoz az AI egyes részei még nem
+     jelentek meg. A program a 3.10–3.14 közötti 64 bites Pythonokkal működik.
+   - Ha már van másik Python a gépen, a 3.12 nyugodtan mellé telepíthető; az
+     `Inditas.bat` magától a megfelelőt választja.
 2. Töltsd le ezt a mappát (GitHubon: **Code → Download ZIP**), és csomagold ki.
 3. Kattints duplán az **`Inditas.bat`** fájlra.
    - Az első indítás pár percig tart, mert települnek a szükséges részek.
+   - Ha a telepítés megszakad, egyszerűen indítsd újra: elölről kezdi.
    - Az első feliratozáskor a program letölti az AI modellt (kb. 3 GB), ez egyszeri.
 4. Magától megnyílik a böngésző a <http://127.0.0.1:8765> címen. Ha nem, írd be kézzel.
 

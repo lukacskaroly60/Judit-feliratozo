@@ -26,7 +26,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='python\python312._pt
 if errorlevel 1 goto :hiba
 
 :pip
-if exist "python\Lib\site-packages\faster_whisper" goto :runtime
+"python\python.exe" -c "import uvicorn, fastapi, multipart, faster_whisper, imageio_ffmpeg" >nul 2>&1 && goto :runtime
 echo [2/3] Szukseges reszek letoltese (kb. 300 MB)...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing 'https://bootstrap.pypa.io/get-pip.py' -OutFile 'python\get-pip.py'"
 if not exist "python\get-pip.py" goto :hiba

@@ -4,8 +4,9 @@ rem  Judit feliratozo - HORDOZHATO valtozat inditasa
 rem  Semmit nem telepit es nem hagy a gepen: minden ebben a mappaban van.
 rem ============================================================
 cd /d "%~dp0"
-if not exist "python\Lib\site-packages\faster_whisper" (
-  echo A hordozhato valtozat meg nincs elokeszitve.
+"python\python.exe" -c "import uvicorn, faster_whisper" >nul 2>&1
+if errorlevel 1 (
+  echo A hordozhato valtozat meg nincs teljesen elokeszitve.
   echo Elobb futtasd le a "Hordozhato_elokeszites.bat" fajlt.
   pause
   exit /b 1
