@@ -123,6 +123,8 @@ Az időkódok kézzel is átírhatók (`00:01:02,500` vagy képkockával `00:01:
 - **Beégetett felirat:** mindig látszik, bármilyen lejátszón és weboldalon.
 - **Bekapcsolható felirat:** külön feliratsáv az MP4-ben, másodpercek alatt elkészül.
 - **SRT:** szabványos feliratfájl, ha a megrendelő külön kéri.
+- **TXT:** csak a feliratok szövege, időzítés nélkül (feliratonként egy sor) –
+  pl. átiratnak, ellenőrzésre vagy továbbszerkesztésre.
 
 A munka folyamatosan, automatikusan mentődik; a kezdőképernyőn a korábbi munkák
 listájából bármikor folytatható. Az adatok a program mappájában, a `data` könyvtárban vannak.
