@@ -171,3 +171,5 @@ dialog menu { display: flex; justify-content: flex-end; gap: 8px; padding: 0; ma
   .editor { grid-template-columns: 1fr; }
   .right { border-left: none; border-top: 1px solid var(--border); min-height: 60vh; }
 }
+
+.version { font-size: 12px; opacity: .6; white-space: nowrap; }
