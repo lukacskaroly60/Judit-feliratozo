@@ -90,7 +90,10 @@ button:disabled { opacity: .5; cursor: default; }
   display: flex; align-items: center; gap: 12px; padding: 10px 14px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
 }
-.project-list a { color: var(--text); font-weight: 600; text-decoration: none; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.project-list a.name { color: var(--text); font-weight: 600; text-decoration: none; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.project-list .downloads { display: flex; gap: 6px; flex-wrap: wrap; }
+.project-list .downloads .button { padding: 4px 10px; font-size: 13px; }
+.button.disabled { opacity: .5; cursor: default; pointer-events: none; }
 .project-list .meta { color: var(--muted); font-size: 13px; white-space: nowrap; }
 
 /* Szerkesztő */
