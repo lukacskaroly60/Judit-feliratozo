@@ -30,6 +30,12 @@ def to_srt(cues: list[dict]) -> str:
     return "\n".join(blocks)
 
 
+def to_txt(cues: list[dict]) -> str:
+    """Csak a szöveg, időkódok nélkül: feliratonként egy sor (a sortörések szóközzé válnak)."""
+    lines = [" ".join(cue["text"].split()) for cue in cues]
+    return "".join(line + "\n" for line in lines if line)
+
+
 def from_srt(content: str) -> list[dict]:
     content = content.lstrip("﻿").replace("\r\n", "\n").replace("\r", "\n")
     cues = []

@@ -288,6 +288,17 @@ def export_srt(pid: str):
     )
 
 
+@app.get("/api/projects/{pid}/export.txt")
+def export_txt(pid: str):
+    project = load(pid)
+    name = Path(project["name"]).stem + ".txt"
+    return PlainTextResponse(
+        "\ufeff" + srt.to_txt(project["cues"]),
+        media_type="text/plain; charset=utf-8",
+        headers=disposition(name),
+    )
+
+
 @app.post("/api/projects/{pid}/retime")
 def retime(pid: str):
     """Időzítés javítása (minimális hossz, olvasási sebesség, rések)."""

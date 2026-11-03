@@ -1,5 +1,5 @@
 from app.segment import Rules, Word, apply_corrections, words_to_cues, wrap
-from app.srt import from_srt, to_srt
+from app.srt import from_srt, to_srt, to_txt
 
 
 def words_from(text, start=0.0, step=0.4):
@@ -59,6 +59,13 @@ def test_srt_roundtrip():
     text = to_srt(cues)
     assert "01:01:01,001 --> 01:01:02,000" in text
     assert from_srt("﻿" + text.replace("\n", "\r\n")) == cues
+
+
+def test_txt_has_only_text():
+    cues = [{"start": 1.5, "end": 3.25, "text": "Első sor\nmásodik sor"},
+            {"start": 4.0, "end": 5.0, "text": "  "},
+            {"start": 6.0, "end": 7.0, "text": "Árvíztűrő tükörfúrógép"}]
+    assert to_txt(cues) == "Első sor második sor\nÁrvíztűrő tükörfúrógép\n"
 
 
 def test_unsure_words_are_marked():

@@ -173,9 +173,11 @@ async function openProject(id) {
   document.title = `${p.name} – Judit feliratozó`;
   video.src = `/api/projects/${id}/video`;
   $("#btnExport").href = `/api/projects/${id}/export.srt`;
+  $("#btnExportTxt").href = `/api/projects/${id}/export.txt`;
   $("#btnDownload").href = `/api/projects/${id}/output`;
   const stem = p.name.replace(/\.[^.]+$/, "");
   $("#btnExport").download = `${stem}.srt`;
+  $("#btnExportTxt").download = `${stem}.txt`;
   $("#btnDownload").download = `${stem}_feliratos.mp4`;
   $("#btnDownload").classList.toggle("hidden", !p.has_output);
   setOutdated(p.output_outdated);
@@ -760,13 +762,15 @@ $("#btnRender").onclick = async () => {
   } catch (e) { toast(e.message); }
 };
 
-$("#btnExport").onclick = async (e) => {
-  if (state.dirty) {
-    e.preventDefault();
-    await flushSave();
-    location.href = $("#btnExport").href;
-  }
-};
+for (const sel of ["#btnExport", "#btnExportTxt"]) {
+  $(sel).onclick = async (e) => {
+    if (state.dirty) {
+      e.preventDefault();
+      await flushSave();
+      location.href = $(sel).href;
+    }
+  };
+}
 
 $("#btnImport").onclick = () => {
   if (state.cues.length && !confirm("A jelenlegi feliratok felülíródnak. Folytatod?")) return;
