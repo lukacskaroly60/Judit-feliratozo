@@ -337,4 +337,13 @@ def get_output(pid: str):
     return FileResponse(f, media_type="video/mp4", headers=disposition(output_name(project)))
 
 
-app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
+class FreshStaticFiles(StaticFiles):
+    """A böngésző mindig rákérdez a friss felületre, így frissítés után nem a régi gombok látszanak."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/", FreshStaticFiles(directory=STATIC, html=True), name="static")

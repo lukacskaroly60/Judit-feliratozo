@@ -117,9 +117,24 @@ async function showStart() {
   for (const p of projects) {
     const li = document.createElement("li");
     const date = new Date(p.updated * 1000).toLocaleString("hu-HU");
-    li.innerHTML = `<a href="#p=${p.id}"></a><span class="meta">${p.cues} felirat · ${date}${p.has_output ? " · ✅ kész videó" : ""}</span><button title="Törlés">🗑</button>`;
-    li.querySelector("a").textContent = p.name;
-    li.querySelector("button").onclick = async () => {
+    const stem = p.name.replace(/\.[^.]+$/, "");
+    const off = p.cues ? "" : " disabled";
+    li.innerHTML = `<a class="name" href="#p=${p.id}"></a><span class="meta">${p.cues} felirat · ${date}${p.has_output ? " · ✅ kész videó" : ""}</span>
+      <span class="downloads">
+        <a class="button${off}" data-ext="srt" href="/api/projects/${p.id}/export.srt" title="Feliratfájl időzítéssel">📄 SRT</a>
+        <a class="button${off}" data-ext="txt" href="/api/projects/${p.id}/export.txt" title="Csak a feliratok szövege, időzítés nélkül">📝 TXT</a>
+        <a class="button${p.has_output ? "" : " disabled"}" data-ext="mp4" href="/api/projects/${p.id}/output" title="Feliratos videó">⬇ Videó</a>
+      </span>
+      <button class="delete" title="Törlés">🗑</button>`;
+    li.querySelector("a.name").textContent = p.name;
+    for (const a of li.querySelectorAll(".downloads a")) {
+      a.download = a.dataset.ext === "mp4" ? `${stem}_feliratos.mp4` : `${stem}.${a.dataset.ext}`;
+      if (a.classList.contains("disabled")) {
+        a.removeAttribute("href");
+        a.title = a.dataset.ext === "mp4" ? "Még nincs elkészítve a feliratos videó" : "Még nincs felirat";
+      }
+    }
+    li.querySelector("button.delete").onclick = async () => {
       if (!confirm(`Biztosan törlöd? (${p.name})`)) return;
       await api(`/api/projects/${p.id}`, { method: "DELETE" });
       showStart();
