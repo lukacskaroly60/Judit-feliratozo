@@ -65,7 +65,7 @@ def test_txt_has_only_text():
     cues = [{"start": 1.5, "end": 3.25, "text": "Első sor\nmásodik sor"},
             {"start": 4.0, "end": 5.0, "text": "  "},
             {"start": 6.0, "end": 7.0, "text": "Árvíztűrő tükörfúrógép"}]
-    assert to_txt(cues) == "Első sor második sor\nÁrvíztűrő tükörfúrógép\n"
+    assert to_txt(cues) == "Első sor második sor\n\nÁrvíztűrő tükörfúrógép\n"
 
 
 def test_unsure_words_are_marked():
