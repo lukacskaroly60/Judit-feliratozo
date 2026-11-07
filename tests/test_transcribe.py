@@ -77,3 +77,23 @@ def test_transcribe_falls_back_to_cpu(monkeypatch, video):
     words = tr.transcribe(str(video), "small", "hu", "", lambda p, m: None)
     assert len(words) == 2
     assert calls["init"] == ["cuda", "cpu"]
+
+
+def test_missing_vcredist_gives_hungarian_hint(monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "faster_whisper":
+            raise FileNotFoundError(
+                "Could not find module 'C:\\\\x\\\\ctranslate2\\\\ctranslate2.dll' (or one of its dependencies)."
+            )
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.delitem(sys.modules, "faster_whisper", raising=False)
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setattr(tr, "_model", None)
+    with pytest.raises(RuntimeError, match="Visual C\\+\\+") as exc:
+        tr.get_model("small")
+    assert tr.VCREDIST_URL in str(exc.value)

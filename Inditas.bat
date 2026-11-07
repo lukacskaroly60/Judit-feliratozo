@@ -39,6 +39,17 @@ if errorlevel 1 goto :hiba
 echo kesz> ".venv\telepites_kesz.txt"
 
 :start
+rem Az AI motorjanak a Microsoft Visual C++ futtatokornyezet kell (MSVCP140.dll)
+".venv\Scripts\python.exe" -c "import ctranslate2" >nul 2>&1
+if errorlevel 1 (
+  echo.
+  echo  FIGYELEM: hianyzik a Microsoft Visual C++ futtatokornyezet, igy az
+  echo  automatikus felirat [AI] nem fog mukodni. Toltsd le es telepitsd innen:
+  echo    https://aka.ms/vs/17/release/vc_redist.x64.exe
+  echo  majd zard be ezt az ablakot, es inditsd ujra a programot.
+  echo  A felirat szerkesztese es a videokeszites addig is mukodik.
+  echo.
+)
 ".venv\Scripts\python.exe" -m app
 pause
 exit /b 0
