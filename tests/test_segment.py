@@ -79,3 +79,14 @@ def test_corrections_whole_word_and_rewrap():
     n = apply_corrections(cues, [{"from": "kovacs", "to": "Kovács"}], Rules())
     assert n == 1
     assert cues[0]["text"].replace("\n", " ") == "Ma Kovács Péter beszélt, Kovacsné nem."
+
+
+def test_long_dashes_become_short_in_outputs():
+    from app.srt import to_txt
+
+    cues = [{"start": 1, "end": 3, "text": "Ez — mondta — igaz.\nA 10–12. oldal −5 fok"}]
+    assert "Ez - mondta - igaz.\nA 10-12. oldal -5 fok" in to_srt(cues)
+    assert to_txt(cues) == "Ez - mondta - igaz. A 10-12. oldal -5 fok\n"
+    assert "00:00:01,000 --> 00:00:03,000" in to_srt(cues)
+    for ch in "‐‑‒–—―−":
+        assert ch not in to_srt(cues) + to_txt(cues)

@@ -3,6 +3,16 @@ import re
 
 _TC = re.compile(r"(\d+):(\d{1,2}):(\d{1,2})[,.](\d{1,3})")
 
+# Az MTVA rendszere a hosszú gondolatjeleket hibának veszi, ezért minden
+# kimenetben (SRT, TXT, videóba égetett felirat) rövid gondolatjelre (-) cseréljük.
+# Hosszú (—), félkvirtmínusz (–), vízszintes vonal (―), számjegy-kötőjel (‒),
+# mínuszjel (−) és a tipográfiai kötőjelek (‐ ‑).
+_LONG_DASHES = re.compile("[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]")
+
+
+def short_dashes(text: str) -> str:
+    return _LONG_DASHES.sub("-", text)
+
 
 def format_tc(seconds: float) -> str:
     ms = max(0, round(seconds * 1000))
@@ -23,7 +33,7 @@ def parse_tc(text: str) -> float:
 def to_srt(cues: list[dict]) -> str:
     blocks = []
     for cue in cues:
-        text = cue["text"].strip()
+        text = short_dashes(cue["text"]).strip()
         if not text:
             continue
         blocks.append(f"{len(blocks) + 1}\n{format_tc(cue['start'])} --> {format_tc(cue['end'])}\n{text}\n")
@@ -33,7 +43,7 @@ def to_srt(cues: list[dict]) -> str:
 def to_txt(cues: list[dict]) -> str:
     """Csak a szöveg, időkódok nélkül: feliratonként egy sor (a sortörések szóközzé válnak),
     a feliratok között egy üres sorral, hogy jól elkülönüljenek."""
-    lines = [" ".join(cue["text"].split()) for cue in cues]
+    lines = [" ".join(short_dashes(cue["text"]).split()) for cue in cues]
     lines = [line for line in lines if line]
     return "\n\n".join(lines) + "\n" if lines else ""
 
