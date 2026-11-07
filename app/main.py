@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -279,11 +279,15 @@ async def import_srt(pid: str, file: UploadFile = File(...)):
 
 @app.get("/api/projects/{pid}/export.srt")
 def export_srt(pid: str):
+    """Az SRT-t a régi magyar Windows-kódolással (Windows-1250, „ANSI”) és Windowsos
+    sorvégekkel adjuk ki, mert az MTVA által használt régi feliratozó program csak
+    így olvassa helyesen az ékezeteket (UTF-8 esetén „á” helyett „Ă˘” lesz)."""
     project = load(pid)
     name = Path(project["name"]).stem + ".srt"
-    return PlainTextResponse(
-        "﻿" + srt.to_srt(project["cues"]),
-        media_type="application/x-subrip; charset=utf-8",
+    text = srt.to_srt(project["cues"]).replace("\n", "\r\n")
+    return Response(
+        text.encode("cp1250", errors="replace"),
+        media_type="application/x-subrip; charset=windows-1250",
         headers=disposition(name),
     )
 
