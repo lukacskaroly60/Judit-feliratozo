@@ -46,10 +46,29 @@ def load_audio(path: str):
     return audio
 
 
+VCREDIST_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+
+
+def _whisper_model_class():
+    try:
+        from faster_whisper import WhisperModel
+    except (ImportError, OSError) as e:
+        # Windowson az AI motorja (ctranslate2) a Microsoft Visual C++
+        # futtatókörnyezetre (MSVCP140.dll) épül, ami nem minden gépen van fent.
+        if "dll" in str(e).lower():
+            raise RuntimeError(
+                "Hiányzik a gépről a Microsoft Visual C++ futtatókörnyezet, ami az AI-hoz kell. "
+                f"Töltsd le és telepítsd innen: {VCREDIST_URL} – "
+                "majd zárd be és indítsd újra a feliratozó programot."
+            ) from e
+        raise
+    return WhisperModel
+
+
 def get_model(name: str, force_cpu: bool = False):
     global _model, _model_name
     if force_cpu or _model is None or _model_name != name:
-        from faster_whisper import WhisperModel
+        WhisperModel = _whisper_model_class()
 
         device, compute_type = ("cpu", "int8") if force_cpu else _device()
         try:

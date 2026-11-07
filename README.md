@@ -26,6 +26,9 @@ telepítéshez és az AI modell első letöltéséhez kell.
 3. Kattints duplán az **`Inditas.bat`** fájlra.
    - Az első indítás pár percig tart, mert települnek a szükséges részek.
    - Ha a telepítés megszakad, egyszerűen indítsd újra: elölről kezdi.
+   - Ha a program azt írja, hogy hiányzik a **Microsoft Visual C++ futtatókörnyezet**
+     (vagy a hibaüzenetben `ctranslate2.dll` szerepel), telepítsd innen, majd indítsd
+     újra a programot: <https://aka.ms/vs/17/release/vc_redist.x64.exe>
    - Az első feliratozáskor a program letölti az AI modellt (kb. 3 GB), ez egyszeri.
 4. Magától megnyílik a böngésző a <http://127.0.0.1:8765> címen. Ha nem, írd be kézzel.
 
